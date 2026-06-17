@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Elon Space Evader</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+        }
+        /* गेम स्कोर UI */
+        #scoreBoard {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #ffcc00; /* गोल्डन रंग */
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 10;
+            text-shadow: 0 0 10px rgba(255,204,0,0.5);
+        }
+        /* मोबाइल कंट्रोल्स */
+        .controls {
+            position: absolute;
+            bottom: 40px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 40px;
+            box-sizing: border-box;
+            z-index: 10;
+        }
+        .btn {
+            width: 85px;
+            height: 85px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid #ffcc00;
+            border-radius: 50%;
+            color: #ffcc00;
+            font-size: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            outline: none;
+            box-shadow: 0 0 15px rgba(255,204,0,0.3);
+        }
+        .btn:active {
+            background: rgba(255, 204, 0, 0.3);
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="scoreBoard">MARS INTEGRITY: <span id="score">0</span></div>
+    
+    <div class="controls">
+        <div class="btn" id="leftBtn">◀</div>
+        <div class="btn" id="rightBtn">▶</div>
+    </div>
+
+    <script>
+        // --- 1. गेम सेटअप और वेरिएबल्स ---
+        let scene, camera, renderer;
+        let elonPlayer; // हमारा नया 'एलोन मस्क' प्लेयर
+        let obstacles = [];
+        let score = 0;
+        let isGameOver = false;
+        let moveLeft = false;
+        let moveRight = false;
+
+        const playerSpeed = 0.2;
+        const obstacleSpeed = 0.25;
+
+        // --- यहाँ एलोन मस्क की फोटो की लिंक डालें ---
+        // उदाहरण के लिए, एक .png या .jpg फोटो की सीधी लिंक
+        // आपको इसे एक असली लिंक से बदलना होगा ताकि यह काम करे।
+        const elonPhotoUrl = elonephoto//encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS7T_12absc71UJoK2B7Apz3et6mggLlw1_7VFOYJKAew&s
+
+        // --- 2. इनिशियलाइजेशन (Initialization) ---
+        function init() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x050510, 0.01); // स्पेस फॉग
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 3, 8); // थोड़ा दूर से व्यू
+            camera.lookAt(0, 1, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // लाइट्स (Lights)
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            directionalLight.position.set(0, 10, 5);
+            scene.add(directionalLight);
+
+            // --- 🧑‍🚀 एलोन मस्क प्लेयर (फोटो टेक्सचर के साथ) ---
+            
+            // 1. टेक्सचर लोडर (Texture Loader) - फोटो लोड करने के लिए
+            const textureLoader = new THREE.TextureLoader();
+            
+            // 2. लोड करने की कोशिश करें
+            textureLoader.load(elonPhotoUrl, (texture) => {
+                // लोड होने पर, फोटो के साथ मटेरियल बनाएं
+                const elonMat = new THREE.MeshBasicMaterial({ 
+                    map: texture, 
+                    transparent: true, // अगर .png पारदर्शी है
+                    side: THREE.DoubleSide // दोनों तरफ से दिखे
+                });
+
+                // 3. एक फ्लैट प्लेन (Flat Plane) बनाएं जिस पर फोटो लगेगी
+                // फोटो के अनुपात (aspect ratio) के अनुसार आकार बदलें (यहाँ 2x3 का उदाहरण है)
+                const elonGeo = new THREE.PlaneGeometry(2, 3); 
+                elonPlayer = new THREE.Mesh(elonGeo, elonMat);
+                
+                elonPlayer.position.y = 1.5; // जमीन से थोड़ा ऊपर
+                elonPlayer.rotation.y = Math.PI; // अगर फोटो उल्टी दिखे तो इसे हटाएं/बदलें
+
+                scene.add(elonPlayer);
+
+            }, undefined, (error) => {
+                // अगर फोटो लोड न हो, तो एक लाल ब्लॉक दिखाएं
+                console.error('फोटो लोड करने में त्रुटि:', error);
+                alert('एलोन की फोटो लोड नहीं हो सकी! कृपया लिंक चेक करें।');
+                
+                const fallbackGeo = new THREE.BoxGeometry(1.5, 2.5, 0.2);
+                const fallbackMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+                elonPlayer = new THREE.Mesh(fallbackGeo, fallbackMat);
+                elonPlayer.position.y = 1.25;
+                scene.add(elonPlayer);
+            });
+
+            // स्टार्स बैकग्राउंड
+            createStars();
+
+            // मोबाइल कंट्रोल्स एक्टिवेट करें
+            setupControls();
+
+            // गेम एनीमेशन शुरू करें
+            animate();
+
+            // हर 0.8 सेकंड में बाधाएं पैदा करना (थोड़ा तेज़)
+            setInterval(spawnObstacle, 800);
+        }
+
+        // --- 3. बैकग्राउंड स्टार्स ---
+        function createStars() {
+            const starGeo = new THREE.BufferGeometry();
+            const starCount = 700;
+            const starPositions = new Float32Array(starCount * 3);
+
+            for (let i = 0; i < starCount * 3; i += 3) {
+                starPositions[i] = (Math.random() - 0.5) * 150;
+                starPositions[i+1] = (Math.random() - 0.5) * 150;
+                starPositions[i+2] = -Math.random() * 80;
+            }
+
+            starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+            const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.15 });
+            const starField = new THREE.Points(starGeo, starMat);
+            scene.add(starField);
+        }
+
+        // --- 4. बाधाएं (एस्टेरॉयड और रॉकेट मलबा) ---
+        function spawnObstacle() {
+            if (isGameOver) return;
+
+            // बाधाओं के आकार
+            const size = Math.random() * 0.5 + 0.4;
+            const obstacleGeo = new THREE.IcosahedronGeometry(size, 0); // और ज़्यादा पथरीला लुक
+            const obstacleMat = new THREE.MeshStandardMaterial({ color: 0x666666, flatShading: true });
+            const obstacle = new THREE.Mesh(obstacleGeo, obstacleMat);
+
+            obstacle.position.x = (Math.random() - 0.5) * 9;
+            obstacle.position.y = size + 0.5;
+            obstacle.position.z = -55;
+
+            scene.add(obstacle);
+            obstacles.push(obstacle);
+        }
+
+        // --- 5. टच कंट्रोल्स ---
+        function setupControls() {
+            const leftBtn = document.getElementById('leftBtn');
+            const rightBtn = document.getElementById('rightBtn');
+
+            leftBtn.addEventListener('touchstart', (e) => { e.preventDefault(); moveLeft = true; });
+            leftBtn.addEventListener('touchend', (e) => { e.preventDefault(); moveLeft = false; });
+            rightBtn.addEventListener('touchstart', (e) => { e.preventDefault(); moveRight = true; });
+            rightBtn.addEventListener('touchend', (e) => { e.preventDefault(); moveRight = false; });
+        }
+
+        // --- 6. कोलिशन (टक्कर) डिटेक्शन ---
+        function checkCollision(obj1, obj2) {
+            // अगर फोटो अभी लोड नहीं हुई है, तो टक्कर की जांच न करें
+            if (!obj1) return false; 
+            const box1 = new THREE.Box3().setFromObject(obj1);
+            const box2 = new THREE.Box3().setFromObject(obj2);
+            return box1.intersectsBox(box2);
+        }
+
+        // --- 7. मुख्य गेम लूप ---
+        function animate() {
+            if (isGameOver) return;
+
+            requestAnimationFrame(animate);
+
+            // एलोन प्लेयर मूवमेंट और स्क्रीन बाउंड्री
+            // (जांचें कि elonPlayer लोड हो गया है)
+            if (elonPlayer) {
+                if (moveLeft && elonPlayer.position.x > -4.2) {
+                    elonPlayer.position.x -= playerSpeed;
+                    elonPlayer.rotation.z = 0.1; // हल्का झुकाव
+                } else if (moveRight && elonPlayer.position.x < 4.2) {
+                    elonPlayer.position.x += playerSpeed;
+                    elonPlayer.rotation.z = -0.1;
+                } else {
+                    elonPlayer.rotation.z = 0; 
+                }
+
+                // कैमरा का हल्का सा फॉलो
+                camera.position.x = elonPlayer.position.x * 0.2;
+            }
+
+            // बाधाओं को आगे बढ़ाना
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].position.z += obstacleSpeed;
+                obstacles[i].rotation.x += 0.03;
+                obstacles[i].rotation.y += 0.04;
+
+                // एलोन से टक्कर की जांच
+                if (checkCollision(elonPlayer, obstacles[i])) {
+                    isGameOver = true;
+                    alert("ओह! एलोन मस्क एक एस्टेरॉयड से टकरा गए! आपका स्कोर: " + score);
+                    location.reload();
+                }
+
+                // स्कोर बढ़ाना
+                if (obstacles[i].position.z > 10) {
+                    scene.remove(obstacles[i]);
+                    obstacles.splice(i, 1);
+                    score += 20; // ज़्यादा स्कोर
+                    document.getElementById('score').innerText = score;
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // स्क्रीन रीसाइज हैंडलर
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        init();
+    </script>
+</body>
+</html>
